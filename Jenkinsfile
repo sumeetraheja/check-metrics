@@ -6,7 +6,7 @@ pipeline {
             steps {
                 echo 'Building..'
                 checkout([$class: 'GitSCM', branches: [[name: '*/master']],
-                     userRemoteConfigs: [[url: 'https://github.com/sumeetraheja/check-metrics.gi']]])
+                     userRemoteConfigs: [[url: 'https://github.com/sumeetraheja/check-metrics.git']]])
                  echo 'Checkout Done..'
             }
         }
