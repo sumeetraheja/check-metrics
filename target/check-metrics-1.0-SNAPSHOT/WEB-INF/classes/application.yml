@@ -1,0 +1,11 @@
+info:
+    app:
+        name: check-metrics
+        version: 1.0.0
+
+spring.main.sources: uk.co.argos.middleware.Application
+metrics.console.show: true
+metrics.datadog.publish: true
+#management.context-path: hrg-private2
+
+

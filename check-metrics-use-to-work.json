@@ -1,0 +1,83 @@
+{
+  "id": "/middleware/test/check-metrics",
+  "cmd": null,
+  "cpus": 0.1,
+  "mem": 1024,
+  "disk": 0,
+  "instances": 1,
+  "constraints": [
+    [
+      "zone",
+      "CLUSTER",
+      "private"
+    ],
+    [
+      "hostname",
+      "GROUP_BY",
+      "4"
+    ]
+  ],
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "forcePullImage": false,
+      "image": "docker.deveng.io/middleware/check-metrics:latest",
+      "parameters": [
+        {
+          "key": "log-opt",
+          "value": "tag=check-metrics"
+        },
+        {
+          "key": "dns-search",
+          "value": "argosretailgroup.com"
+        },
+        {
+          "key": "dns",
+          "value": "172.16.9.175"
+        },
+        {
+          "key": "dns",
+          "value": "172.16.9.176"
+        }
+
+      ],
+      "privileged": false
+    },
+    "volumes": [],
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "hostPort": 0,
+        "labels": {},
+        "protocol": "tcp",
+        "servicePort": 10092
+      }
+    ]
+  },
+  "env": {
+    "JAVA_OPTS": "-Xms1228m -Xmx1228m",
+    "SERVICE_8080_NAME": "check-metrics",
+    "SERVICE_8080_TAGS": "internalHTTP",
+    "CONSUL_HOST": "consul.masters.parkfarm.staging.deveng.systems",
+    "CONSUL_PORT": "80"
+  },
+  "healthChecks": [
+    {
+      "gracePeriodSeconds": 30,
+      "ignoreHttp1xx": false,
+      "intervalSeconds": 10,
+      "maxConsecutiveFailures": 3,
+      "path": "/hrg-private/health",
+      "portIndex": 0,
+      "protocol": "HTTP",
+      "timeoutSeconds": 20,
+      "delaySeconds": 15
+    }
+  ],
+  "labels": {
+    "SERVICE_NAME": "check-metrics",
+    "TEAM_NAME": "middleware",
+    "SERVICE_ZONE": "private"
+  },
+  "portDefinitions": []
+}

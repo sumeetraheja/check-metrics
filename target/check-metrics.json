@@ -1,0 +1,38 @@
+{
+  "id": "/middleware/test/check-metrics",
+  "cmd": null,
+  "cpus": 0.1,
+  "mem": 1024,
+  "disk": 0,
+  "instances": 1,
+  "container": {
+    "docker": {
+      "image": "docker.deveng.io/middleware/check-metrics:latest"
+    }
+  },
+  "labels": {
+    "SERVICE_NAME": "check-metrics",
+    "SERVICE_ZONE": "private",
+    "TEAM_NAME": "middleware"
+  },
+  "healthChecks": [
+    {
+      "portIndex": 0,
+      "protocol": "HTTP",
+      "path": "/hrg-private/health",
+      "gracePeriodSeconds": 120,
+      "intervalSeconds": 30,
+      "timeoutSeconds": 10,
+      "maxConsecutiveFailures": 2
+    }
+  ],
+  "portDefinitions": [
+    {
+      "labels": {
+        "containerPort": "8080",
+        "loadbalancerPort": "80"
+      }
+    }
+  ]
+
+}

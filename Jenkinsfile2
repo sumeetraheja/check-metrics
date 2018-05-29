@@ -1,0 +1,190 @@
+#!/usr/bin/env groovy
+@Library('pipeline-shared-libs@master') _
+env.DOCKER_IMAGE_TAG = '0.0.0'
+
+pipeline {
+
+ 
+	agent {
+		label "ec2"
+  	}
+  
+	parameters {
+  		booleanParam (name : 'DEPLOY_TO_PRODUCTION', defaultValue: false, description: '')
+  	}
+  
+  	  environment {
+		API_VERSION = 'v1'
+		APP_NAME = 'basket-gateway'
+  	}
+ 
+	stages {
+  	
+		stage('Create build tag') {
+			steps {
+	        		script {
+	    				def build_commit = "${env.GIT_COMMIT}".take(7)
+	    				env.DOCKER_IMAGE_TAG = "${env.BRANCH_NAME}.${API_VERSION}.$build_commit".replace("/", "-");
+	    				env.CUCUMBER_BRANCH_NAME = "${env.BRANCH_NAME}".replace("/", "%252F");
+	    				echo "Build tag is ${env.DOCKER_IMAGE_TAG}"
+				}
+	      	}
+		}
+  
+	  	stage('Build docker container for build-time environment') {
+			steps {
+				sh 'docker build -f Build_Dockerfile -t basket-gateway-build .'
+			}
+	    }
+       
+		stage('Build basket gateway artifact') {
+			steps {
+				sh "docker run --rm -v \$(pwd)/:/project basket-gateway-build ./gradlew clean build -PprojVersion=${env.DOCKER_IMAGE_TAG} checkstyleMain jacocoTestReport --no-daemon"
+	      	}
+	    }
+    
+	    stage('Build and Push application docker container') {
+	    	  	when { 
+	    	  		anyOf { 
+	    	  			branch "develop"; 
+	    	  			branch "master"; 
+	    	  			branch "release/*" 
+	    	  		} 
+	    	  	}
+			steps {
+				script {
+					if ( !params.DEPLOY_TO_PRODUCTION ) {
+						withDockerRegistry([url: "https://docker.deveng.systems/"]) {
+							def image = docker.build("docker.deveng.systems/checkout/${APP_NAME}:${env.DOCKER_IMAGE_TAG}")
+					        	image.push()
+						}
+					}
+			   	}
+			}
+	    }
+
+    		stage('Deploy to dev') {
+      		when{
+        			branch 'develop'
+      		}
+      		steps {
+        			echo 'Deploying....'
+        
+        			script {
+        				sh "./CreateMarathonBody.sh --appname ${APP_NAME} --appversion ${env.DOCKER_IMAGE_TAG} --apiversion  ${API_VERSION} --cpus 0.1 --memory 2048 --instances 1 --environment dev"
+					def jsonBody = readFile('marathonJson').trim() 
+					build job: '/paas-marathon/master', parameters: [
+						[$class: 'StringParameterValue', name: 'json', value: "${jsonBody}"],
+						[$class: 'StringParameterValue', name: 'id', value: "/checkout/${APP_NAME}-${API_VERSION}"],
+						[$class: 'StringParameterValue', name: 'environment', value: "dev"],
+						[$class: 'StringParameterValue', name: 'location', value: "eu-west-1"],
+						[$class: 'StringParameterValue', name: 'action', value: "update"] 
+					]
+			
+					sh "./CheckDeployment.sh --appname ${APP_NAME} --environment dev --location eu-west-1 --appversion ${env.DOCKER_IMAGE_TAG} --apiversion ${API_VERSION}"
+				}
+      		}
+		}
+    
+    		stage('Deploy to staging') {
+			when { 
+				anyOf { 
+					branch "master"; 
+					branch "release/*" 
+				} 
+			}
+			steps {
+				echo 'Deploying....'
+				
+				script {
+				
+					sh "./CreateMarathonBody.sh --appname ${APP_NAME} --appversion ${env.DOCKER_IMAGE_TAG} --apiversion  ${API_VERSION} --cpus 0.1 --memory 2048 --instances 3 --environment staging"
+					def jsonBody = readFile('marathonJson').trim() 
+					
+					build job: '/paas-marathon/master', parameters: [
+						[$class: 'StringParameterValue', name: 'json', value: "${jsonBody}"],
+					  	[$class: 'StringParameterValue', name: 'id', value: "/checkout/${APP_NAME}-${API_VERSION}"],
+					  	[$class: 'StringParameterValue', name: 'environment', value: "staging"],
+					  	[$class: 'StringParameterValue', name: 'location', value: "eu-west-1"],
+					  	[$class: 'StringParameterValue', name: 'action', value: "update"] 
+					]
+					
+					sh "./CheckDeployment.sh --appname ${APP_NAME} --environment staging --location eu-west-1 --appversion ${env.DOCKER_IMAGE_TAG} --apiversion ${API_VERSION}"
+					
+					build job: '/paas-marathon/master', parameters: [
+					  [$class: 'StringParameterValue', name: 'json', value: "${jsonBody}"],
+					  [$class: 'StringParameterValue', name: 'id', value: "/checkout/${APP_NAME}-${API_VERSION}"],
+					  [$class: 'StringParameterValue', name: 'environment', value: "staging"],
+					  [$class: 'StringParameterValue', name: 'location', value: "parkfarm"],
+					  [$class: 'StringParameterValue', name: 'action', value: "update"] 
+					]
+					
+					sh "./CheckDeployment.sh --appname ${APP_NAME} --environment staging --location parkfarm --appversion ${env.DOCKER_IMAGE_TAG} --apiversion ${API_VERSION}"
+				}        
+			}
+		}
+		
+		stage('Deploy to production') {
+			when{
+        			branch 'master'
+      		}
+      		steps {
+        			echo 'Deploying....'
+        
+				script {
+				
+					if ( params.DEPLOY_TO_PRODUCTION ) {
+						sh "./CreateMarathonBody.sh --appname ${APP_NAME} --appversion ${env.DOCKER_IMAGE_TAG} --apiversion  ${API_VERSION} --cpus 0.1 --memory 2048 --instances 3 --environment production"
+						def jsonBody = readFile('marathonJson').trim() 
+						
+						build job: '/paas-marathon/master', parameters: [
+							[$class: 'StringParameterValue', name: 'json', value: "${jsonBody}"],
+							[$class: 'StringParameterValue', name: 'id', value: "/checkout/${APP_NAME}-${API_VERSION}"],
+							[$class: 'StringParameterValue', name: 'environment', value: "production"],
+							[$class: 'StringParameterValue', name: 'location', value: "eu-west-1"],
+							[$class: 'StringParameterValue', name: 'action', value: "update"] 
+						]
+						
+						sh "./CheckDeployment.sh --appname ${APP_NAME} --environment production --location eu-west-1 --appversion ${env.DOCKER_IMAGE_TAG} --apiversion ${API_VERSION}"
+						
+					}
+            		}
+          	}
+    		}
+	}
+  
+	post {
+    		always {
+    			junit 'build/test-results/test/*.xml'
+	        jacoco(
+	        		execPattern: 'build/jacoco/**.exec',
+	        		exclusionPattern: '**/uk/co/argos/checkout/basketgateway/BasketGatewayApplication*'
+	        	)
+
+	        	checkstyle(
+	        	  	canRunOnFailed: true,
+		      	defaultEncoding: '',
+		      	healthy: '100',
+		      	pattern: 'build/reports/checkstyle/main.xml',
+		      	unHealthy: '90',
+		      	useStableBuildAsReference: true
+		    )
+
+		    findbugs( 
+		    		canComputeNew: false, 
+		    		defaultEncoding: '', 
+		    		excludePattern: '', 
+		    		healthy: '100', 
+		    		includePattern: '', 
+		    		pattern: 'build/reports/spotbugs/main.xml', 
+		    		unHealthy: '90'
+		    	)
+		    	
+			step([$class: 'CucumberReportPublisher', jsonReportDirectory: 'TestReport'])
+		    	
+        		cleanWs()
+        		slackNotification(currentBuild.result, 'sessionservice')
+    		}
+  	}
+
+}

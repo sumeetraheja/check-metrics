@@ -1,0 +1,3 @@
+sumeet.name=raheja
+management.security.enabled=false
+management.endpoints.enabled-by-default=true
