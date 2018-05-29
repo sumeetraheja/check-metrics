@@ -5,8 +5,11 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building..'
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']],
-                     userRemoteConfigs: [[url: 'https://github.com/sumeetraheja/check-metrics.git']]])
+                dir('subDirCheckout') {
+                    checkout([$class: 'GitSCM', branches: [[name: '*/master']],
+                                         userRemoteConfigs: [[url: 'https://github.com/sumeetraheja/check-metrics.git']]])
+                }
+
                  echo 'Checkout Done..'
             }
         }
